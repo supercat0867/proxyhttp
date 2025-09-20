@@ -15,6 +15,11 @@ func NewClient(pool *HttpPool) *Client {
 	return &Client{pool: pool}
 }
 
+// GetPool 获取代理池
+func (c *Client) GetPool() *HttpPool {
+	return c.pool
+}
+
 // Do 使用代理池发请求
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	proxyClient, err := c.pool.GetProxyClient()
