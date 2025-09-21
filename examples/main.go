@@ -57,7 +57,7 @@ func main() {
 
 	// 请求示例
 	req, err := http.NewRequest("GET", "https://httpbin.org/ip", nil)
-	body, err := client.Do(req)
+	body, err := client.DoWithRetry(req, 3, 5*time.Second)
 	if err != nil {
 		log.Fatal(err)
 	}

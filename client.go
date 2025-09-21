@@ -1,6 +1,7 @@
 package proxyhttp
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 )
@@ -26,31 +27,43 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	return proxyClient.Client.Do(req)
+
+	resp, err := proxyClient.Client.Do(req)
+	if err != nil {
+		// 出现错误就移除代理
+		c.pool.removeProxyClient(proxyClient)
+	}
+	return resp, err
 }
 
 // DoWithRetry 带重试机制的请求
 // retries: 最大重试次数
 // interval: 每次重试的间隔时间
 func (c *Client) DoWithRetry(req *http.Request, retries int, interval time.Duration) (*http.Response, error) {
-	var resp *http.Response
-	var err error
+	var lastErr error
 
 	for attempt := 0; attempt <= retries; attempt++ {
-		proxyClient, getErr := c.pool.GetProxyClient()
-		if getErr != nil {
-			err = getErr
-		} else {
-			resp, err = proxyClient.Client.Do(req)
-			if err == nil {
-				return resp, nil
-			}
+		proxyClient, err := c.pool.GetProxyClient()
+		if err != nil {
+			lastErr = fmt.Errorf("failed to get proxy client: %v", err)
+			time.Sleep(interval)
+			continue
 		}
+
+		// 使用代理发送请求
+		resp, err := proxyClient.Client.Do(req)
+		if err == nil {
+			return resp, nil
+		}
+
+		// 请求失败，记录错误并移除该代理
+		lastErr = fmt.Errorf("failed to do request: %v", err)
+		c.pool.removeProxyClient(proxyClient)
 
 		if attempt < retries {
 			time.Sleep(interval)
 		}
 	}
 
-	return resp, err
+	return nil, lastErr
 }
